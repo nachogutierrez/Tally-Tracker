@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TallyTracker</title>
+
+    <!-- Ensure Tailwind uses class-based dark mode so toggling the `dark` class works -->
+    <script>
+      // Configure Tailwind BEFORE loading the CDN script
+      tailwind = typeof tailwind === "undefined" ? {} : tailwind;
+      tailwind.config = {
+        darkMode: "class",
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      // Initialize theme right away to prevent flash of unstyled content
+      const theme = localStorage.getItem("theme");
+      const systemIsDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+      if (theme === "dark" || (!theme && systemIsDark)) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    </script>
+  </head>
+  <body
+    class="h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300"
+  >
+    <div id="app" class="max-w-2xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
+      <div
+        id="signed-out-view"
+        class="hidden text-center mt-16 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md"
+      >
+        <h1
+          class="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-white mb-4"
+        >
+          TallyTracker
+        </h1>
+        <p class="text-gray-600 dark:text-gray-300 mb-6">
+          Please sign in with your Google account to continue.
+        </p>
+        <div id="sign-in-btn-container"></div>
+      </div>
+
+      <div id="signed-in-view" class="hidden">
+        <header class="flex justify-between items-center mb-6">
+          <h1
+            class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white"
+          >
+            TallyTracker
+          </h1>
+          <div class="flex items-center space-x-2 sm:space-x-4">
+            <button
+              id="theme-toggle"
+              class="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg
+                id="theme-icon-light"
+                class="h-6 w-6 hidden"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                ></path>
+              </svg>
+              <svg
+                id="theme-icon-dark"
+                class="h-6 w-6 hidden"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                ></path>
+              </svg>
+            </button>
+            <div id="auth-container"></div>
+          </div>
+        </header>
+
+        <main id="main-content">
+          <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
+            <nav class="-mb-px flex space-x-4 sm:space-x-8" aria-label="Tabs">
+              <button
+                id="tab-log"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-indigo-600 dark:text-indigo-400 border-indigo-500"
+              >
+                Log
+              </button>
+              <button
+                id="tab-insights"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 border-transparent"
+              >
+                Insights
+              </button>
+            </nav>
+          </div>
+
+          <div id="tab-content-log">
+            <p>Logging interface will go here.</p>
+          </div>
+          <div id="tab-content-insights" class="hidden">
+            <h2 class="text-xl font-semibold mt-4">data.json content:</h2>
+            <pre
+              id="data-display"
+              class="bg-gray-200 dark:bg-gray-800 p-4 rounded mt-2 whitespace-pre-wrap break-words text-xs"
+            ></pre>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+
+    <script>
+      // --- CONSTANTS & DOM ELEMENTS ---
+      const FOLDER_NAME = "TallyTracker";
+      const FILE_NAME = "data.json";
+      const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+      const FILE_MIME_TYPE = "application/json";
+
+      const signedInView = document.getElementById("signed-in-view");
+      const signedOutView = document.getElementById("signed-out-view");
+      const signInBtnContainer = document.getElementById(
+        "sign-in-btn-container"
+      );
+      const authContainer = document.getElementById("auth-container");
+      const dataDisplay = document.getElementById("data-display");
+
+      const themeToggle = document.getElementById("theme-toggle");
+      const themeIconLight = document.getElementById("theme-icon-light");
+      const themeIconDark = document.getElementById("theme-icon-dark");
+
+      const tabLog = document.getElementById("tab-log");
+      const tabInsights = document.getElementById("tab-insights");
+      const tabContentLog = document.getElementById("tab-content-log");
+      const tabContentInsights = document.getElementById(
+        "tab-content-insights"
+      );
+
+      let config = {};
+      let tokenClient;
+      let gapiInited = false;
+      let gisInited = false;
+
+      // --- THEME MANAGEMENT ---
+      function applyTheme(isDark) {
+        if (isDark) {
+          document.documentElement.classList.add("dark");
+          themeIconLight.classList.remove("hidden");
+          themeIconDark.classList.add("hidden");
+        } else {
+          document.documentElement.classList.remove("dark");
+          themeIconLight.classList.add("hidden");
+          themeIconDark.classList.remove("hidden");
+        }
+      }
+
+      function setupTheme() {
+        const isDarkMode = document.documentElement.classList.contains("dark");
+        applyTheme(isDarkMode);
+
+        themeToggle.addEventListener("click", () => {
+          const isCurrentlyDark =
+            document.documentElement.classList.contains("dark");
+          localStorage.setItem("theme", isCurrentlyDark ? "light" : "dark");
+          applyTheme(!isCurrentlyDark);
+        });
+      }
+
+      // --- TAB MANAGEMENT ---
+      function setupTabs() {
+        tabLog.addEventListener("click", () => {
+          tabContentLog.classList.remove("hidden");
+          tabContentInsights.classList.add("hidden");
+          tabLog.classList.add(
+            "text-indigo-600",
+            "dark:text-indigo-400",
+            "border-indigo-500"
+          );
+          tabLog.classList.remove(
+            "text-gray-500",
+            "hover:text-gray-700",
+            "dark:text-gray-400",
+            "dark:hover:text-gray-200",
+            "hover:border-gray-300",
+            "dark:hover:border-gray-600",
+            "border-transparent"
+          );
+          tabInsights.classList.add(
+            "text-gray-500",
+            "hover:text-gray-700",
+            "dark:text-gray-400",
+            "dark:hover:text-gray-200",
+            "hover:border-gray-300",
+            "dark:hover:border-gray-600",
+            "border-transparent"
+          );
+          tabInsights.classList.remove(
+            "text-indigo-600",
+            "dark:text-indigo-400",
+            "border-indigo-500"
+          );
+        });
+        tabInsights.addEventListener("click", () => {
+          tabContentInsights.classList.remove("hidden");
+          tabContentLog.classList.add("hidden");
+          tabInsights.classList.add(
+            "text-indigo-600",
+            "dark:text-indigo-400",
+            "border-indigo-500"
+          );
+          tabInsights.classList.remove(
+            "text-gray-500",
+            "hover:text-gray-700",
+            "dark:text-gray-400",
+            "dark:hover:text-gray-200",
+            "hover:border-gray-300",
+            "dark:hover:border-gray-600",
+            "border-transparent"
+          );
+          tabLog.classList.add(
+            "text-gray-500",
+            "hover:text-gray-700",
+            "dark:text-gray-400",
+            "dark:hover:text-gray-200",
+            "hover:border-gray-300",
+            "dark:hover:border-gray-600",
+            "border-transparent"
+          );
+          tabLog.classList.remove(
+            "text-indigo-600",
+            "dark:text-indigo-400",
+            "border-indigo-500"
+          );
+        });
+      }
+
+      // --- AUTHENTICATION ---
+      async function init() {
+        try {
+          const response = await fetch("config.json");
+          config = await response.json();
+
+          gapi.load("client", initializeGapiClient);
+
+          tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: config.oauth_client,
+            scope:
+              "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
+            callback: tokenCallback,
+          });
+          gisInited = true;
+        } catch (error) {
+          console.error("Error loading config or initializing clients:", error);
+          signedOutView.innerHTML =
+            '<p class="text-red-500">Error loading configuration. Please check config.json.</p>';
+        }
+      }
+
+      async function initializeGapiClient() {
+        await gapi.client.init({
+          discoveryDocs: [
+            "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
+          ],
+        });
+        await gapi.client.load("oauth2", "v2");
+        gapiInited = true;
+
+        const token = localStorage.getItem("google_auth_token");
+        const expiry = localStorage.getItem("google_auth_token_expiry");
+
+        if (token && expiry && new Date().getTime() < parseInt(expiry)) {
+          gapi.client.setToken(JSON.parse(token));
+          await handleSignedIn();
+        } else {
+          signedOutView.classList.remove("hidden");
+          maybeRenderAuthButton();
+        }
+      }
+
+      function maybeRenderAuthButton() {
+        if (gapiInited && gisInited) {
+          const signInButton = document.createElement("button");
+          signInButton.innerText = "Sign In with Google";
+          signInButton.className =
+            "bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105";
+          signInButton.onclick = () => tokenClient.requestAccessToken();
+
+          signInBtnContainer.innerHTML = "";
+          signInBtnContainer.appendChild(signInButton);
+        }
+      }
+
+      async function tokenCallback(tokenResponse) {
+        if (tokenResponse.error) {
+          console.error("Google token error:", tokenResponse.error);
+          return;
+        }
+
+        const expiry = new Date().getTime() + tokenResponse.expires_in * 1000;
+        localStorage.setItem(
+          "google_auth_token",
+          JSON.stringify(tokenResponse)
+        );
+        localStorage.setItem("google_auth_token_expiry", expiry);
+
+        gapi.client.setToken(tokenResponse);
+        await handleSignedIn();
+      }
+
+      async function handleSignedIn() {
+        signedOutView.classList.add("hidden");
+        signedInView.classList.remove("hidden");
+
+        let userProfile = {};
+        try {
+          const profile = await gapi.client.oauth2.userinfo.get();
+          userProfile = profile.result;
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+        }
+
+        authContainer.innerHTML = "";
+        const authControl = document.createElement("div");
+        authControl.className = "flex items-center space-x-2";
+
+        const userImage = document.createElement("img");
+        userImage.src = userProfile.picture || "";
+        userImage.alt = "User avatar";
+        userImage.className = "w-8 h-8 rounded-full";
+
+        const signOutButton = document.createElement("button");
+        signOutButton.innerHTML = `<span class="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-200">${userProfile.email}</span><span class="sm:hidden text-xs text-red-500 dark:text-red-400">Sign Out</span>`;
+        signOutButton.className =
+          "p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700";
+        signOutButton.onclick = handleSignOut;
+
+        authControl.appendChild(userImage);
+        authControl.appendChild(signOutButton);
+        authContainer.appendChild(authControl);
+
+        await checkDrive();
+      }
+
+      function handleSignOut() {
+        localStorage.removeItem("google_auth_token");
+        localStorage.removeItem("google_auth_token_expiry");
+
+        const token = gapi.client.getToken();
+        if (token) {
+          google.accounts.oauth2.revoke(token.access_token, () => {
+            gapi.client.setToken("");
+            signedInView.classList.add("hidden");
+            signedOutView.classList.remove("hidden");
+            maybeRenderAuthButton();
+          });
+        }
+      }
+
+      // --- GOOGLE DRIVE LOGIC ---
+      async function checkDrive() {
+        try {
+          dataDisplay.textContent = "Loading data from Google Drive...";
+          const folderId = await getOrCreateFolder();
+          if (!folderId)
+            throw new Error(
+              "Could not find or create TallyTracker folder in AppData."
+            );
+
+          const fileId = await getOrCreateFile(folderId);
+          if (!fileId) throw new Error("Could not find or create data.json.");
+
+          const fileContent = await readFile(fileId);
+          dataDisplay.textContent = JSON.stringify(fileContent, null, 2);
+        } catch (error) {
+          console.error("Drive check failed:", error);
+          const errorMessage = error.result?.error?.message || error.message;
+          dataDisplay.textContent = `An error occurred: ${errorMessage}`;
+        }
+      }
+
+      async function getOrCreateFolder() {
+        const query = `name='${FOLDER_NAME}' and mimeType='${FOLDER_MIME_TYPE}' and 'appDataFolder' in parents and trashed=false`;
+        const response = await gapi.client.drive.files.list({
+          q: query,
+          spaces: "appDataFolder",
+          fields: "files(id, name)",
+        });
+        return response.result.files.length > 0
+          ? response.result.files[0].id
+          : (
+              await gapi.client.drive.files.create({
+                resource: {
+                  name: FOLDER_NAME,
+                  mimeType: FOLDER_MIME_TYPE,
+                  parents: ["appDataFolder"],
+                },
+                fields: "id",
+              })
+            ).result.id;
+      }
+
+      async function getOrCreateFile(folderId) {
+        const query = `name='${FILE_NAME}' and '${folderId}' in parents and trashed=false`;
+        const response = await gapi.client.drive.files.list({
+          q: query,
+          spaces: "appDataFolder",
+          fields: "files(id, name)",
+        });
+
+        if (response.result.files.length > 0) {
+          return response.result.files[0].id;
+        } else {
+          const fileMetadata = {
+            name: FILE_NAME,
+            parents: [folderId],
+            mimeType: FILE_MIME_TYPE,
+          };
+          const skeletonContent = {
+            v: 1,
+            meta: { rev: 0, created: new Date().toISOString() },
+            cats: {},
+            logs: [],
+          };
+
+          const boundary = "-------314159265358979323846";
+          const delimiter = "\r\n--" + boundary + "\r\n";
+          const close_delim = "\r\n--" + boundary + "--";
+
+          const multipartRequestBody =
+            delimiter +
+            "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+            JSON.stringify(fileMetadata) +
+            delimiter +
+            "Content-Type: " +
+            FILE_MIME_TYPE +
+            "\r\n\r\n" +
+            JSON.stringify(skeletonContent) +
+            close_delim;
+
+          const request = gapi.client.request({
+            path: "/upload/drive/v3/files",
+            method: "POST",
+            params: { uploadType: "multipart" },
+            headers: {
+              "Content-Type": 'multipart/related; boundary="' + boundary + '"',
+            },
+            body: multipartRequestBody,
+          });
+
+          return (await request).result.id;
+        }
+      }
+
+      async function readFile(fileId) {
+        const response = await gapi.client.drive.files.get({
+          fileId: fileId,
+          alt: "media",
+        });
+        return response.result;
+      }
+
+      // --- INITIALIZATION ---
+      setupTheme();
+      setupTabs();
+      init();
+    </script>
+  </body>
+</html>
