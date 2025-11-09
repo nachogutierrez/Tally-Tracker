@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TallyTracker</title>
+    <link rel="manifest" href="manifest.json">
 
     <!-- Ensure Tailwind uses class-based dark mode so toggling the `dark` class works -->
     <script>
@@ -193,5 +194,6 @@
     <script src="https://accounts.google.com/gsi/client"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="src/app.js"></script>
+    <div id="toast-container" class="fixed bottom-0 right-0 p-4 sm:p-6 space-y-2"></div>
   </body>
 </html>

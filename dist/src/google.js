@@ -3,6 +3,15 @@ import { FOLDER_NAME, FILE_NAME, FOLDER_MIME_TYPE, FILE_MIME_TYPE } from './conf
 let tokenClient;
 let config = {};
 let fileId = null;
+let lastKnownRevisionId = null;
+
+// Custom error for handling optimistic concurrency conflicts
+export class ConflictError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
 
 export async function initGoogleClient(onSignedIn) {
   try {
@@ -58,6 +67,7 @@ export function signOut(onSignedOut) {
     google.accounts.oauth2.revoke(token.access_token, () => {
       gapi.client.setToken("");
       fileId = null;
+      lastKnownRevisionId = null;
       onSignedOut();
     });
   }
@@ -116,16 +126,22 @@ async function getOrCreateFile(folderId) {
   return result.result.id;
 }
 
-async function readFile(id) {
-  const response = await gapi.client.drive.files.get({ fileId: id, alt: "media" });
-  return response.result;
+async function getFileContentAndRevision(id) {
+  const metaResponse = await gapi.client.drive.files.get({
+    fileId: id,
+    fields: 'headRevisionId'
+  });
+  lastKnownRevisionId = metaResponse.result.headRevisionId;
+
+  const contentResponse = await gapi.client.drive.files.get({ fileId: id, alt: "media" });
+  return contentResponse.result;
 }
 
 export async function loadDataFromDrive() {
   try {
     const folderId = await getOrCreateFolder();
     fileId = await getOrCreateFile(folderId);
-    const fileContent = await readFile(fileId);
+    const fileContent = await getFileContentAndRevision(fileId);
     if (!fileContent.logs) fileContent.logs = [];
     if (!fileContent.cats) fileContent.cats = {};
     return fileContent;
@@ -139,19 +155,33 @@ export async function loadDataFromDrive() {
 
 export async function saveStateToDrive(state) {
   if (!fileId) {
-    console.error("No fileId, cannot save.");
-    return;
+    throw new Error("No fileId, cannot save.");
   }
+
+  // Pre-flight check for conflicts
+  const metaResponse = await gapi.client.drive.files.get({
+    fileId: fileId,
+    fields: 'headRevisionId'
+  });
+  const remoteRevisionId = metaResponse.result.headRevisionId;
+
+  if (lastKnownRevisionId && remoteRevisionId !== lastKnownRevisionId) {
+    throw new ConflictError('File has been modified by another client.');
+  }
+
   try {
     state.meta.rev = (state.meta.rev || 0) + 1;
-    await gapi.client.request({
+    const response = await gapi.client.request({
       path: `/upload/drive/v3/files/${fileId}`,
       method: 'PATCH',
-      params: { uploadType: 'media' },
+      params: { uploadType: 'media', fields: 'headRevisionId' },
       body: JSON.stringify(state)
     });
+    // Update revision ID after successful save
+    lastKnownRevisionId = response.result.headRevisionId;
   } catch (error) {
     console.error("Failed to save state to Drive:", error);
     alert("Error saving data. Please try again.");
+    throw error; // Re-throw to be handled by the caller
   }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "TallyTracker",
+  "short_name": "TallyTracker",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4f46e5",
+  "description": "A simple app to track your goals.",
+  "icons": [
+    {
+      "src": "src/assets/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

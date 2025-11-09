@@ -85,6 +85,47 @@ export function render(appState) {
   renderInsights(appState);
 }
 
+export function showToast(message, duration = 3000, action = null) {
+  const toast = document.createElement('div');
+  toast.className = 'flex items-center justify-between bg-gray-800 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out translate-y-2 opacity-0';
+  
+  const messageSpan = document.createElement('span');
+  messageSpan.textContent = message;
+  toast.appendChild(messageSpan);
+
+  if (action && action.text && action.callback) {
+    const actionButton = document.createElement('button');
+    actionButton.textContent = action.text;
+    actionButton.className = 'ml-4 text-indigo-400 hover:text-indigo-300 font-bold';
+    actionButton.onclick = () => {
+      action.callback();
+      // Optionally hide the toast immediately on action
+      hideToast();
+    };
+    toast.appendChild(actionButton);
+  }
+
+  DOM.toastContainer.appendChild(toast);
+
+  // Animate in
+  setTimeout(() => {
+    toast.classList.remove('translate-y-2', 'opacity-0');
+  }, 100);
+
+  const hideToast = () => {
+    toast.classList.add('translate-y-2', 'opacity-0');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  };
+
+  const timeoutId = setTimeout(hideToast, duration);
+
+  // Allow manual dismissal by clicking
+  toast.addEventListener('click', () => {
+    clearTimeout(timeoutId);
+    hideToast();
+  });
+}
+
 function populateLogCategoryDropdown(appState) {
   const select = DOM.logCategory;
   const cats = appState.cats || {};

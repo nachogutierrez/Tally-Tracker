@@ -1,16 +1,74 @@
 import { DOM } from './config.js';
 import * as Google from './google.js';
+import { ConflictError } from './google.js';
 import * as UI from './ui.js';
 
 let appState = { cats: {}, logs: [] };
 
 // --- DATA MUTATION ---
-function generateShortId() {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+
+/**
+ * A wrapper for mutation functions to handle optimistic concurrency and provide Undo functionality.
+ * It retries a mutation if a conflict is detected.
+ * @param {function(object): object} mutationLogic A function that takes the current state,
+ *   mutates it, and returns the new state.
+ */
+async function withMutationRetry(mutationLogic) {
+  const maxRetries = 3;
+  const previousState = JSON.parse(JSON.stringify(appState)); // For Undo
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const newState = mutationLogic(JSON.parse(JSON.stringify(appState)));
+      
+      await Google.saveStateToDrive(newState);
+
+      // If save is successful, update the global state and UI
+      appState = newState;
+      UI.render(appState);
+      
+      // Show Undo toast
+      UI.showToast("Change saved.", 20000, {
+        text: "Undo",
+        callback: () => {
+          // Revert to the previous state and save it, but without retry logic this time.
+          Google.saveStateToDrive(previousState)
+            .then(() => {
+              appState = previousState;
+              UI.render(appState);
+              UI.showToast("Action undone.");
+            })
+            .catch(err => {
+              console.error("Failed to undo:", err);
+              alert("Failed to undo the last action. Please reload.");
+            });
+        }
+      });
+
+      return; // Exit successfully
+
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        console.warn(`Conflict detected on attempt ${i + 1}. Reloading and retrying...`);
+        const freshState = await Google.loadDataFromDrive();
+        if (freshState) {
+          appState = freshState;
+        } else {
+          alert("Failed to reload data from Drive after a conflict. Aborting.");
+          return;
+        }
+      } else {
+        console.error("An unexpected error occurred during mutation:", error);
+        alert("An unexpected error occurred while saving your changes.");
+        return;
+      }
+    }
+  }
+  alert("Failed to save changes after multiple attempts due to conflicts. Please reload the page.");
 }
 
-function getNextLogId() {
-  return (appState.logs || []).reduce((maxId, log) => Math.max(log[0], maxId), 0) + 1;
+function generateShortId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 }
 
 async function addCategory(name, goal) {
@@ -24,57 +82,67 @@ async function addCategory(name, goal) {
     return;
   }
 
-  const newId = generateShortId();
-  appState.cats[newId] = { n: name, g: goal };
-  await Google.saveStateToDrive(appState);
-  UI.render(appState);
+  await withMutationRetry(state => {
+    const newId = generateShortId();
+    if (!state.cats) state.cats = {};
+    state.cats[newId] = { n: name, g: goal };
+    return state;
+  });
 }
 
 async function editCategory(id, newName) {
-  if (appState.cats[id]) {
-    appState.cats[id].n = newName;
-    await Google.saveStateToDrive(appState);
-    UI.render(appState);
-  }
+  await withMutationRetry(state => {
+    if (state.cats[id]) {
+      state.cats[id].n = newName;
+    }
+    return state;
+  });
 }
 
 async function deleteCategory(id) {
-  if (appState.cats[id]) {
-    appState.logs = (appState.logs || []).filter(log => log[2] !== id);
-    delete appState.cats[id];
-    await Google.saveStateToDrive(appState);
-    UI.render(appState);
-  }
+  await withMutationRetry(state => {
+    if (state.cats[id]) {
+      state.logs = (state.logs || []).filter(log => log[2] !== id);
+      delete state.cats[id];
+    }
+    return state;
+  });
 }
 
 async function addLog(catId, delta, timestamp, note) {
-  const newLog = [getNextLogId(), timestamp, catId, delta];
-  if (note) newLog.push(note);
-  appState.logs.push(newLog);
-  await Google.saveStateToDrive(appState);
-  UI.render(appState);
+  await withMutationRetry(state => {
+    const getNextLogId = () => (state.logs || []).reduce((maxId, log) => Math.max(log[0], maxId), 0) + 1;
+    const newLog = [getNextLogId(), timestamp, catId, delta];
+    if (note) newLog.push(note);
+    if (!state.logs) state.logs = [];
+    state.logs.push(newLog);
+    return state;
+  });
 }
 
 async function editLog(id, newDelta, newNote) {
-  const logIndex = (appState.logs || []).findIndex(log => log[0] === id);
-  if (logIndex > -1) {
-      appState.logs[logIndex][3] = newDelta;
-      const noteIndex = 4;
-      if (newNote) {
-          appState.logs[logIndex][noteIndex] = newNote;
-      } else if (appState.logs[logIndex].length > noteIndex) {
-          appState.logs[logIndex].splice(noteIndex, 1);
-      }
-      await Google.saveStateToDrive(appState);
-      UI.render(appState);
-  }
+  await withMutationRetry(state => {
+    const logIndex = (state.logs || []).findIndex(log => log[0] === id);
+    if (logIndex > -1) {
+        state.logs[logIndex][3] = newDelta;
+        const noteIndex = 4;
+        if (newNote) {
+            state.logs[logIndex][noteIndex] = newNote;
+        } else if (state.logs[logIndex].length > noteIndex) {
+            state.logs[logIndex].splice(noteIndex, 1);
+        }
+    }
+    return state;
+  });
 }
 
 async function deleteLog(id) {
-  appState.logs = (appState.logs || []).filter(log => log[0] !== id);
-  await Google.saveStateToDrive(appState);
-  UI.render(appState);
+  await withMutationRetry(state => {
+    state.logs = (state.logs || []).filter(log => log[0] !== id);
+    return state;
+  });
 }
+
 
 // --- EVENT LISTENERS ---
 function setupEventListeners() {
