@@ -1,6 +1,7 @@
 // src/ui/insights.js
 import { DOM } from '../config.js';
 import * as Goals from '../goals.js';
+import * as Charts from './charts.js';
 
 function getGoalTypeName(type) {
     switch (type) {
@@ -14,7 +15,7 @@ function getGoalTypeName(type) {
 
 function formatDate(date) {
     // Display date in user's local timezone as per DESIGN.md
-    return date.toLocaleDate'String(undefined, { month: 'short', day: 'numeric', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 }
 
 function formatPace(value) {
@@ -113,9 +114,40 @@ export function renderInsights(appState) {
                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
                     ${projectionHtml}
                 </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-lg font-semibold text-center mb-2">Activity Charts</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <h5 class="text-center font-medium mb-1">Last 30 Days (by day)</h5>
+                            <div class="h-48">
+                                <canvas id="bar-chart-${cat.id}"></canvas>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-center font-medium mb-1">Last 90 Days (cumulative)</h5>
+                            <div class="h-48">
+                                <canvas id="line-chart-${cat.id}"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
 
     container.innerHTML = cardsHtml;
+
+    // After rendering the HTML, initialize the charts
+    categoriesWithGoals.forEach(cat => {
+        const barCanvas = document.getElementById(`bar-chart-${cat.id}`);
+        const lineCanvas = document.getElementById(`line-chart-${cat.id}`);
+
+        if (barCanvas) {
+            Charts.renderBarChart(barCanvas, cat, logs);
+        }
+        if (lineCanvas) {
+            Charts.renderLineChart(lineCanvas, cat, logs);
+        }
+    });
 }
