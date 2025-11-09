@@ -1,4 +1,5 @@
 import { DOM } from './config.js';
+import { renderInsights } from './ui/insights.js';
 
 export function setupTheme() {
   const applyTheme = (isDark) => {
@@ -81,6 +82,7 @@ export function render(appState) {
   renderCategories(appState);
   renderLogs(appState);
   populateLogCategoryDropdown(appState);
+  renderInsights(appState);
 }
 
 function populateLogCategoryDropdown(appState) {

@@ -23,4 +23,5 @@ export const DOM = {
   logTimestamp: document.getElementById("log-timestamp"),
   logNote: document.getElementById("log-note"),
   logHistory: document.getElementById("log-history"),
+  insightsTab: document.getElementById("tab-content-insights"),
 };
