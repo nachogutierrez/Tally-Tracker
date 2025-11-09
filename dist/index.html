@@ -7,16 +7,12 @@
     <link rel="icon" href="src/assets/icon.svg" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
 
-    <!-- Ensure Tailwind uses class-based dark mode so toggling the `dark` class works -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Configure Tailwind BEFORE loading the CDN script
-      tailwind = typeof tailwind === "undefined" ? {} : tailwind;
       tailwind.config = {
         darkMode: "class",
       };
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-
     <script>
       // Initialize theme right away to prevent flash of unstyled content
       const theme = localStorage.getItem("theme");
@@ -30,171 +26,23 @@
       }
     </script>
   </head>
-  <body
-    class="h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300"
-  >
-    <div id="app" class="max-w-2xl mx-auto p-4 sm:p-6 lg:p-8 font-sans">
-      <div
-        id="signed-out-view"
-        class="hidden text-center mt-16 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md"
-      >
-        <h1
-          class="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-white mb-4"
-        >
-          TallyTracker
-        </h1>
-        <p class="text-gray-600 dark:text-gray-300 mb-6">
-          Please sign in with your Google account to continue.
-        </p>
-        <div id="sign-in-btn-container"></div>
-      </div>
-
-      <div id="signed-in-view" class="hidden">
-        <header class="flex justify-between items-center mb-6">
-          <h1
-            class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white"
-          >
-            TallyTracker
-          </h1>
-          <div class="flex items-center space-x-2 sm:space-x-4">
-            <button
-              id="theme-toggle"
-              class="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            >
-              <svg
-                id="theme-icon-light"
-                class="h-6 w-6 hidden"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                ></path>
-              </svg>
-              <svg
-                id="theme-icon-dark"
-                class="h-6 w-6 hidden"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                ></path>
-              </svg>
-            </button>
-            <div id="auth-container"></div>
-          </div>
-        </header>
-
-        <main id="main-content">
-          <div class="mb-4 border-b border-gray-200 dark:border-gray-700">
-            <nav class="-mb-px flex space-x-4 sm:space-x-8" aria-label="Tabs">
-              <button data-tab="log" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Log
-              </button>
-              <button data-tab="insights" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Insights
-              </button>
-              <button data-tab="categories" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                Categories
-              </button>
-            </nav>
-          </div>
-
-          <div id="tab-content-log" class="tab-content space-y-6">
-            <!-- Logging Form -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h2 class="text-xl font-bold mb-4">Log an Activity</h2>
-                <form id="log-form" class="space-y-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="log-cat" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-                            <select id="log-cat" name="log-cat" required class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                        </div>
-                        <div>
-                            <label for="log-delta" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Count</label>
-                            <input type="number" id="log-delta" name="log-delta" required min="1" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <button type="button" data-delta="1" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+1</button>
-                        <button type="button" data-delta="5" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+5</button>
-                        <button type="button" data-delta="10" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+10</button>
-                    </div>
-                    <div>
-                        <label for="log-timestamp" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Timestamp</label>
-                        <input type="datetime-local" id="log-timestamp" name="log-timestamp" required class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                    </div>
-                    <div>
-                        <label for="log-note" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Note (Optional)</label>
-                        <input type="text" id="log-note" name="log-note" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                    </div>
-                    <button type="submit" class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                        Save Log
-                    </button>
-                </form>
-            </div>
-            <!-- Recent History -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h2 class="text-xl font-bold mb-4">Recent History</h2>
-                <div id="log-history">
-                    <!-- Logs will be rendered here -->
-                </div>
-            </div>
-          </div>
-          <div id="tab-content-insights" class="tab-content hidden">
-            <p>Insights and visualizations will go here.</p>
-          </div>
-          <div id="tab-content-categories" class="tab-content hidden">
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-              <h2 class="text-xl font-bold mb-4">Manage Categories</h2>
-              <form id="add-category-form" class="mb-6 space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label for="cat-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category Name</label>
-                    <input type="text" id="cat-name" name="cat-name" required maxlength="50" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                  </div>
-                  <div>
-                    <label for="cat-goal-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Goal Type (Optional)</label>
-                    <select id="cat-goal-type" name="cat-goal-type" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                      <option value="">None</option>
-                      <option value="D">Daily</option>
-                      <option value="W">Weekly</option>
-                      <option value="M">Monthly</option>
-                      <option value="Y">Yearly</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label for="cat-goal-target" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Goal Target</label>
-                  <input type="number" id="cat-goal-target" name="cat-goal-target" min="1" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" disabled>
-                </div>
-                <button type="submit" class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                  Add Category
-                </button>
-              </form>
-
-              <div id="category-list">
-                <!-- Categories will be rendered here -->
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
+  <body class="h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div id="app" class="h-full"></div>
 
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "preact": "https://cdn.jsdelivr.net/npm/preact@10.11.3/dist/preact.module.js",
+          "preact/hooks": "https://cdn.jsdelivr.net/npm/preact@10.11.3/hooks/dist/hooks.module.js",
+          "htm": "https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.module.js"
+        }
+      }
+    </script>
+
     <script type="module" src="src/app.js"></script>
-    <div id="toast-container" class="fixed bottom-0 right-0 p-4 sm:p-6 space-y-2"></div>
   </body>
 </html>

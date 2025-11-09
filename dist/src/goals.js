@@ -1,150 +1,114 @@
-// src/goals.js
-
 /**
- * Calculates the start and end dates for a goal cycle in UTC.
- * @param {'D' | 'W' | 'M' | 'Y'} goalType
- * @param {Date} [now=new Date()] The current date to calculate the cycle for.
+ * Gets the start and end dates for a goal cycle based on the type and a reference date.
+ * @param {string} goalType - 'D', 'W', 'M', or 'Y'.
+ * @param {Date} refDate - The date to calculate the cycle for (usually today).
  * @returns {{start: Date, end: Date}}
  */
-export function getGoalCycle(goalType, now = new Date()) {
-  const start = new Date(now);
-  start.setUTCHours(0, 0, 0, 0);
+export function getCycle(goalType, refDate = new Date()) {
+    const start = new Date(refDate);
+    start.setHours(0, 0, 0, 0);
 
-  let end;
-
-  switch (goalType) {
-    case 'D':
-      end = new Date(start);
-      end.setUTCDate(start.getUTCDate() + 1);
-      break;
-    case 'W':
-      const dayOfWeek = start.getUTCDay(); // Sunday = 0, Monday = 1
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Days to subtract to get to Monday
-      start.setUTCDate(start.getUTCDate() - diff);
-      end = new Date(start);
-      end.setUTCDate(start.getUTCDate() + 7);
-      break;
-    case 'M':
-      start.setUTCDate(1);
-      end = new Date(start);
-      end.setUTCMonth(start.getUTCMonth() + 1);
-      break;
-    case 'Y':
-      start.setUTCMonth(0, 1);
-      end = new Date(start);
-      end.setUTCFullYear(start.getUTCFullYear() + 1);
-      break;
-    default:
-      throw new Error(`Invalid goal type: ${goalType}`);
-  }
-
-  return { start, end };
-}
-
-/**
- * Calculates the user's historical average pace for a given category.
- * @param {string} catId The category ID.
- * @param {Array} allLogs All log entries.
- * @returns {{daily: number|null, weekly: number|null, monthly: number|null}}
- */
-export function calculatePace(catId, allLogs) {
-    const catLogs = allLogs.filter(log => log[2] === catId).sort((a, b) => a[1].localeCompare(b[1]));
-
-    if (catLogs.length < 1) {
-        return { daily: null, weekly: null, monthly: null };
+    switch (goalType) {
+        case 'D': // Daily
+            break;
+        case 'W': // Weekly
+            const dayOfWeek = start.getDay(); // Sunday = 0
+            start.setDate(start.getDate() - dayOfWeek);
+            break;
+        case 'M': // Monthly
+            start.setDate(1);
+            break;
+        case 'Y': // Yearly
+            start.setMonth(0, 1);
+            break;
+        default:
+            throw new Error(`Invalid goal type: ${goalType}`);
     }
 
-    const firstLogTimestamp = catLogs[0][1];
-    const firstLogDate = new Date(firstLogTimestamp);
-    const now = new Date();
+    const end = new Date(start);
+    switch (goalType) {
+        case 'D': end.setDate(end.getDate() + 1); break;
+        case 'W': end.setDate(end.getDate() + 7); break;
+        case 'M': end.setMonth(end.getMonth() + 1); break;
+        case 'Y': end.setFullYear(end.getFullYear() + 1); break;
+    }
 
-    // Calculate total days since the first log. Use a minimum of 1 to avoid division by zero.
-    const elapsedMs = now.getTime() - firstLogDate.getTime();
-    const elapsedDays = Math.max(1, elapsedMs / (1000 * 60 * 60 * 24));
-
-    const totalDelta = catLogs.reduce((sum, log) => sum + log[3], 0);
-    const dailyPace = totalDelta / elapsedDays;
-
-    // Only provide weekly/monthly pace if enough time has passed for the average to be meaningful.
-    const weeklyPace = elapsedDays >= 7 ? dailyPace * 7 : null;
-    const monthlyPace = elapsedDays >= 30 ? dailyPace * 30.44 : null; // Avg days in a month
-
-    return {
-        daily: dailyPace,
-        weekly: weeklyPace,
-        monthly: monthlyPace,
-    };
+    return { start, end };
 }
 
-
 /**
- * Calculates the progress for a category with a goal.
- * @param {string} catId The category ID.
- * @param {object} category The category object.
- * @param {Array} logs The array of all logs.
- * @returns {object | null} Progress information or null if no goal.
+ * Calculates progress towards a goal for a specific category.
+ * @param {string} catId - The ID of the category.
+ * @param {object} category - The category object, including the goal.
+ * @param {Array} allLogs - The complete array of log entries.
+ * @returns {object|null} An object with detailed progress metrics, or null if not applicable.
  */
-export function calculateProgress(catId, category, logs) {
-  if (!category.g) return null;
+export function calculateProgress(catId, category, allLogs) {
+    if (!category || !category.g) return null;
 
-  const { t: goalType, x: target } = category.g;
-  const { start, end } = getGoalCycle(goalType);
-  
-  // DESIGN.md: Timestamps are stored as naive ISO strings. Assume UTC for calculations.
-  const startTime = start.toISOString().substring(0, 19);
-  const endTime = end.toISOString().substring(0, 19);
+    const goal = category.g;
+    const today = new Date();
+    const cycle = getCycle(goal.t, today);
 
-  const relevantLogs = logs.filter(log => {
-    const logTimestamp = log[1];
-    return log[2] === catId && logTimestamp >= startTime && logTimestamp < endTime;
-  });
+    // --- Cycle-specific progress ---
+    const cycleLogs = (allLogs || []).filter(log => {
+        const logDate = new Date(log[1]);
+        return log[2] === catId && logDate >= cycle.start && logDate < cycle.end;
+    });
+    const achieved = cycleLogs.reduce((sum, log) => sum + log[3], 0);
+    const target = goal.x;
+    const progress = target > 0 ? achieved / target : 0;
+    const totalDaysInCycle = (cycle.end - cycle.start) / (1000 * 60 * 60 * 24);
+    const elapsedDaysInCycle = Math.max(1, (today - cycle.start) / (1000 * 60 * 60 * 24));
+    const remainingDays = Math.max(0, totalDaysInCycle - elapsedDaysInCycle);
+    const idealPace = target / totalDaysInCycle;
+    const currentCyclePace = achieved / elapsedDaysInCycle;
+    const neededPerDay = remainingDays > 0 ? Math.max(0, (target - achieved) / remainingDays) : 0;
+    const onTrack = currentCyclePace >= idealPace;
+    const isCatchUp = !onTrack && achieved < target;
+    let status = 'On Track';
+    if (achieved >= target) {
+        status = 'Goal Met';
+    } else if (isCatchUp) {
+        status = 'Behind';
+    }
 
-  const achieved = relevantLogs.reduce((sum, log) => sum + log[3], 0);
-  const remaining = Math.max(0, target - achieved);
-  const progress = target > 0 ? (achieved / target) : 0;
+    // --- Lifetime pace calculation (new logic) ---
+    const allLogsForCategory = (allLogs || []).filter(log => log[2] === catId);
+    let pace = { daily: null, weekly: null, monthly: null };
 
-  // --- Projection & Pace Calculation ---
-  const now = new Date();
-  const remainingMs = Math.max(0, end.getTime() - now.getTime());
-  const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
-  const daysForProjection = Math.max(1, remainingDays);
-  const neededPerDay = Math.ceil(remaining / daysForProjection);
+    if (allLogsForCategory.length > 0) {
+        const firstLog = allLogsForCategory.reduce((earliest, current) => 
+            new Date(current[1]) < new Date(earliest[1]) ? current : earliest
+        );
+        const firstLogDate = new Date(firstLog[1]);
+        const totalAchieved = allLogsForCategory.reduce((sum, log) => sum + log[3], 0);
+        
+        // Use floating point days for accurate conditional checks
+        const daysElapsed = (today - firstLogDate) / (1000 * 60 * 60 * 24);
 
-  // Edge Case Handling: If a goal is started late in a cycle, `neededPerDay` can be
-  // discouragingly high. To provide better context, we calculate the "ideal" pace
-  // as if progress was made evenly throughout the entire cycle.
-  const cycleDurationMs = end.getTime() - start.getTime();
-  const totalCycleDays = Math.round(cycleDurationMs / (1000 * 60 * 60 * 24));
-  const idealPace = totalCycleDays > 0 ? Math.ceil(target / totalCycleDays) : target;
+        if (daysElapsed >= 1) {
+            pace.daily = totalAchieved / daysElapsed;
+        }
+        if (daysElapsed >= 7) {
+            pace.weekly = totalAchieved / (daysElapsed / 7);
+        }
+        if (daysElapsed >= 30) {
+            pace.monthly = totalAchieved / (daysElapsed / 30);
+        }
+    }
 
-  // We enter a "catch-up" state if the required daily pace is significantly
-  // higher than the ideal pace. This avoids showing alarming numbers for minor
-  // deviations and only triggers for major discrepancies, like a late start.
-  const CATCH_UP_THRESHOLD = 2.5; // Required pace must be >2.5x the ideal pace.
-  const isCatchUp = neededPerDay > (idealPace * CATCH_UP_THRESHOLD) && remaining > idealPace;
-
-  // A simple 'on track' logic: is your current progress percentage greater than the percentage of time elapsed in the cycle?
-  const cycleDuration = end.getTime() - start.getTime();
-  const elapsedDuration = Math.max(0, now.getTime() - start.getTime());
-  const timeProgress = cycleDuration > 0 ? elapsedDuration / cycleDuration : 0;
-  const onTrack = progress >= timeProgress;
-
-  // Calculate historical pace
-  const pace = calculatePace(catId, logs);
-
-  return {
-    target,
-    achieved,
-    remaining,
-    progress,
-    cycle: { start, end },
-    remainingDays,
-    neededPerDay,
-    idealPace,
-    isCatchUp,
-    onTrack,
-    status: onTrack ? 'On Track' : 'Behind',
-    goalType,
-    pace,
-  };
+    return {
+        target,
+        achieved,
+        progress,
+        cycle,
+        neededPerDay,
+        status,
+        onTrack,
+        goalType: goal.t,
+        isCatchUp,
+        idealPace,
+        pace // This now contains the accurate, conditional long-term pace
+    };
 }

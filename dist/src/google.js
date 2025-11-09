@@ -1,6 +1,8 @@
-import { FOLDER_NAME, FILE_NAME, FOLDER_MIME_TYPE, FILE_MIME_TYPE } from './config.js';
+export const FOLDER_NAME = "TallyTracker";
+export const FILE_NAME = "tally_tracker_data.json";
+export const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+export const FILE_MIME_TYPE = "application/json";
 
-let tokenClient;
 let config = {};
 let fileId = null;
 let lastKnownRevisionId = null;
@@ -13,7 +15,7 @@ export class ConflictError extends Error {
   }
 }
 
-export async function initGoogleClient(onSignedIn) {
+export async function initGoogleClient() {
   try {
     const response = await fetch("config.json");
     config = await response.json();
@@ -22,54 +24,11 @@ export async function initGoogleClient(onSignedIn) {
     await gapi.client.init({
       discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
     });
-    await gapi.client.load("oauth2", "v2");
-
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: config.oauth_client,
-      scope: "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
-      callback: (tokenResponse) => tokenCallback(tokenResponse, onSignedIn),
-    });
-
-    const token = localStorage.getItem("google_auth_token");
-    const expiry = localStorage.getItem("google_auth_token_expiry");
-    if (token && expiry && new Date().getTime() < parseInt(expiry)) {
-      gapi.client.setToken(JSON.parse(token));
-      await onSignedIn();
-    }
+    
     return true;
   } catch (error) {
     console.error("Error loading config or initializing clients:", error);
     return false;
-  }
-}
-
-async function tokenCallback(tokenResponse, onSignedIn) {
-  if (tokenResponse.error) {
-    console.error("Google token error:", tokenResponse.error);
-    return;
-  }
-  const expiry = new Date().getTime() + tokenResponse.expires_in * 1000;
-  localStorage.setItem("google_auth_token", JSON.stringify(tokenResponse));
-  localStorage.setItem("google_auth_token_expiry", expiry);
-  gapi.client.setToken(tokenResponse);
-  await onSignedIn();
-}
-
-export function requestAccessToken() {
-  tokenClient.requestAccessToken();
-}
-
-export function signOut(onSignedOut) {
-  localStorage.removeItem("google_auth_token");
-  localStorage.removeItem("google_auth_token_expiry");
-  const token = gapi.client.getToken();
-  if (token) {
-    google.accounts.oauth2.revoke(token.access_token, () => {
-      gapi.client.setToken("");
-      fileId = null;
-      lastKnownRevisionId = null;
-      onSignedOut();
-    });
   }
 }
 
