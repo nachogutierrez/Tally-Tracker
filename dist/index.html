@@ -107,8 +107,46 @@
             </nav>
           </div>
 
-          <div id="tab-content-log" class="tab-content">
-            <p>Logging interface will go here.</p>
+          <div id="tab-content-log" class="tab-content space-y-6">
+            <!-- Logging Form -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4">Log an Activity</h2>
+                <form id="log-form" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="log-cat" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                            <select id="log-cat" name="log-cat" required class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                        </div>
+                        <div>
+                            <label for="log-delta" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Count</label>
+                            <input type="number" id="log-delta" name="log-delta" required min="1" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" data-delta="1" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+1</button>
+                        <button type="button" data-delta="5" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+5</button>
+                        <button type="button" data-delta="10" class="quick-delta-btn px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-700">+10</button>
+                    </div>
+                    <div>
+                        <label for="log-timestamp" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Timestamp</label>
+                        <input type="datetime-local" id="log-timestamp" name="log-timestamp" required class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="log-note" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Note (Optional)</label>
+                        <input type="text" id="log-note" name="log-note" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
+                        Save Log
+                    </button>
+                </form>
+            </div>
+            <!-- Recent History -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4">Recent History</h2>
+                <div id="log-history">
+                    <!-- Logs will be rendered here -->
+                </div>
+            </div>
           </div>
           <div id="tab-content-insights" class="tab-content hidden">
             <p>Insights and visualizations will go here.</p>
@@ -153,390 +191,6 @@
 
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
-
-    <script>
-      // --- CONSTANTS & DOM ELEMENTS ---
-      const FOLDER_NAME = "TallyTracker";
-      const FILE_NAME = "data.json";
-      const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
-      const FILE_MIME_TYPE = "application/json";
-
-      const DOM = {
-        signedInView: document.getElementById("signed-in-view"),
-        signedOutView: document.getElementById("signed-out-view"),
-        signInBtnContainer: document.getElementById("sign-in-btn-container"),
-        authContainer: document.getElementById("auth-container"),
-        themeToggle: document.getElementById("theme-toggle"),
-        themeIconLight: document.getElementById("theme-icon-light"),
-        themeIconDark: document.getElementById("theme-icon-dark"),
-        tabs: document.querySelectorAll(".tab-btn"),
-        tabContents: document.querySelectorAll(".tab-content"),
-        addCategoryForm: document.getElementById("add-category-form"),
-        categoryList: document.getElementById("category-list"),
-        catGoalType: document.getElementById("cat-goal-type"),
-        catGoalTarget: document.getElementById("cat-goal-target"),
-      };
-
-      // --- STATE MANAGEMENT ---
-      let config = {};
-      let tokenClient;
-      let gapiInited = false;
-      let gisInited = false;
-      let appState = {};
-      let fileId = null;
-
-      // --- THEME MANAGEMENT ---
-      function applyTheme(isDark) {
-        if (isDark) {
-          document.documentElement.classList.add("dark");
-          DOM.themeIconLight.classList.remove("hidden");
-          DOM.themeIconDark.classList.add("hidden");
-        } else {
-          document.documentElement.classList.remove("dark");
-          DOM.themeIconLight.classList.add("hidden");
-          DOM.themeIconDark.classList.remove("hidden");
-        }
-      }
-
-      function setupTheme() {
-        const isDarkMode = document.documentElement.classList.contains("dark");
-        applyTheme(isDarkMode);
-        DOM.themeToggle.addEventListener("click", () => {
-          const isCurrentlyDark = document.documentElement.classList.contains("dark");
-          localStorage.setItem("theme", isCurrentlyDark ? "light" : "dark");
-          applyTheme(!isCurrentlyDark);
-        });
-      }
-
-      // --- TAB MANAGEMENT ---
-      function setupTabs() {
-        const ACTIVE_CLASSES = ["text-indigo-600", "dark:text-indigo-400", "border-indigo-500"];
-        const INACTIVE_CLASSES = ["text-gray-500", "hover:text-gray-700", "dark:text-gray-400", "dark:hover:text-gray-200", "hover:border-gray-300", "dark:hover:border-gray-600", "border-transparent"];
-        
-        DOM.tabs.forEach(tab => {
-          tab.addEventListener("click", () => {
-            const targetTab = tab.dataset.tab;
-
-            DOM.tabs.forEach(t => {
-              t.classList.remove(...ACTIVE_CLASSES);
-              t.classList.add(...INACTIVE_CLASSES);
-            });
-            tab.classList.add(...ACTIVE_CLASSES);
-            tab.classList.remove(...INACTIVE_CLASSES);
-
-            DOM.tabContents.forEach(content => {
-              if (content.id === `tab-content-${targetTab}`) {
-                content.classList.remove("hidden");
-              } else {
-                content.classList.add("hidden");
-              }
-            });
-          });
-        });
-        // Set initial state
-        document.querySelector('[data-tab="log"]').click();
-      }
-
-      // --- AUTHENTICATION ---
-      async function init() {
-        try {
-          const response = await fetch("config.json");
-          config = await response.json();
-          gapi.load("client", initializeGapiClient);
-          tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: config.oauth_client,
-            scope: "https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile",
-            callback: tokenCallback,
-          });
-          gisInited = true;
-        } catch (error) {
-          console.error("Error loading config or initializing clients:", error);
-          DOM.signedOutView.innerHTML = '<p class="text-red-500">Error loading configuration. Please check config.json.</p>';
-        }
-      }
-
-      async function initializeGapiClient() {
-        await gapi.client.init({
-          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-        });
-        await gapi.client.load("oauth2", "v2");
-        gapiInited = true;
-        const token = localStorage.getItem("google_auth_token");
-        const expiry = localStorage.getItem("google_auth_token_expiry");
-        if (token && expiry && new Date().getTime() < parseInt(expiry)) {
-          gapi.client.setToken(JSON.parse(token));
-          await handleSignedIn();
-        } else {
-          DOM.signedOutView.classList.remove("hidden");
-          maybeRenderAuthButton();
-        }
-      }
-
-      function maybeRenderAuthButton() {
-        if (gapiInited && gisInited) {
-          const signInButton = document.createElement("button");
-          signInButton.innerText = "Sign In with Google";
-          signInButton.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105";
-          signInButton.onclick = () => tokenClient.requestAccessToken();
-          DOM.signInBtnContainer.innerHTML = "";
-          DOM.signInBtnContainer.appendChild(signInButton);
-        }
-      }
-
-      async function tokenCallback(tokenResponse) {
-        if (tokenResponse.error) {
-          console.error("Google token error:", tokenResponse.error);
-          return;
-        }
-        const expiry = new Date().getTime() + tokenResponse.expires_in * 1000;
-        localStorage.setItem("google_auth_token", JSON.stringify(tokenResponse));
-        localStorage.setItem("google_auth_token_expiry", expiry);
-        gapi.client.setToken(tokenResponse);
-        await handleSignedIn();
-      }
-
-      async function handleSignedIn() {
-        DOM.signedOutView.classList.add("hidden");
-        DOM.signedInView.classList.remove("hidden");
-        let userProfile = {};
-        try {
-          const profile = await gapi.client.oauth2.userinfo.get();
-          userProfile = profile.result;
-        } catch (error) {
-          console.error("Error fetching user profile:", error);
-        }
-        DOM.authContainer.innerHTML = "";
-        const authControl = document.createElement("div");
-        authControl.className = "flex items-center space-x-2";
-        const userImage = document.createElement("img");
-        userImage.src = userProfile.picture || "";
-        userImage.alt = "User avatar";
-        userImage.className = "w-8 h-8 rounded-full";
-        const signOutButton = document.createElement("button");
-        signOutButton.innerHTML = `<span class="hidden sm:inline text-sm font-medium text-gray-700 dark:text-gray-200">${userProfile.email}</span><span class="sm:hidden text-xs text-red-500 dark:text-red-400">Sign Out</span>`;
-        signOutButton.className = "p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700";
-        signOutButton.onclick = handleSignOut;
-        authControl.appendChild(userImage);
-        authControl.appendChild(signOutButton);
-        DOM.authContainer.appendChild(authControl);
-        await loadDataFromDrive();
-      }
-
-      function handleSignOut() {
-        localStorage.removeItem("google_auth_token");
-        localStorage.removeItem("google_auth_token_expiry");
-        const token = gapi.client.getToken();
-        if (token) {
-          google.accounts.oauth2.revoke(token.access_token, () => {
-            gapi.client.setToken("");
-            DOM.signedInView.classList.add("hidden");
-            DOM.signedOutView.classList.remove("hidden");
-            maybeRenderAuthButton();
-            appState = {};
-            fileId = null;
-          });
-        }
-      }
-
-      // --- GOOGLE DRIVE & DATA LOGIC ---
-      async function loadDataFromDrive() {
-        try {
-          const folderId = await getOrCreateFolder();
-          fileId = await getOrCreateFile(folderId);
-          const fileContent = await readFile(fileId);
-          appState = fileContent;
-          render();
-        } catch (error) {
-          console.error("Drive check failed:", error);
-          const errorMessage = error.result?.error?.message || error.message;
-          alert(`An error occurred: ${errorMessage}`);
-        }
-      }
-
-      async function saveStateToDrive() {
-        if (!fileId) {
-          console.error("No fileId, cannot save.");
-          return;
-        }
-        try {
-          appState.meta.rev = (appState.meta.rev || 0) + 1;
-          await gapi.client.request({
-            path: `/upload/drive/v3/files/${fileId}`,
-            method: 'PATCH',
-            params: { uploadType: 'media' },
-            body: JSON.stringify(appState)
-          });
-        } catch (error) {
-          console.error("Failed to save state to Drive:", error);
-          alert("Error saving data. Please try again.");
-        }
-      }
-
-      async function getOrCreateFolder() {
-        const query = `name='${FOLDER_NAME}' and mimeType='${FOLDER_MIME_TYPE}' and 'appDataFolder' in parents and trashed=false`;
-        const response = await gapi.client.drive.files.list({ q: query, spaces: "appDataFolder", fields: "files(id, name)" });
-        return response.result.files.length > 0 ? response.result.files[0].id : (await gapi.client.drive.files.create({ resource: { name: FOLDER_NAME, mimeType: FOLDER_MIME_TYPE, parents: ["appDataFolder"] }, fields: "id" })).result.id;
-      }
-
-      async function getOrCreateFile(folderId) {
-        const query = `name='${FILE_NAME}' and '${folderId}' in parents and trashed=false`;
-        const response = await gapi.client.drive.files.list({ q: query, spaces: "appDataFolder", fields: "files(id, name)" });
-        if (response.result.files.length > 0) {
-          return response.result.files[0].id;
-        } else {
-          const fileMetadata = { name: FILE_NAME, parents: [folderId], mimeType: FILE_MIME_TYPE };
-          const skeletonContent = { v: 1, meta: { rev: 0, created: new Date().toISOString() }, cats: {}, logs: [] };
-          const boundary = "-------314159265358979323846";
-          const delimiter = "\r\n--" + boundary + "\r\n";
-          const close_delim = "\r\n--" + boundary + "--";
-          const multipartRequestBody = delimiter + "Content-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(fileMetadata) + delimiter + "Content-Type: " + FILE_MIME_TYPE + "\r\n\r\n" + JSON.stringify(skeletonContent) + close_delim;
-          const request = gapi.client.request({ path: "/upload/drive/v3/files", method: "POST", params: { uploadType: "multipart" }, headers: { "Content-Type": 'multipart/related; boundary="' + boundary + '"' }, body: multipartRequestBody });
-          return (await request).result.id;
-        }
-      }
-
-      async function readFile(fileId) {
-        const response = await gapi.client.drive.files.get({ fileId: fileId, alt: "media" });
-        return response.result;
-      }
-
-      // --- RENDERING & UI LOGIC ---
-      function render() {
-        renderCategories();
-      }
-
-      function renderCategories() {
-        DOM.categoryList.innerHTML = "";
-        const cats = appState.cats || {};
-        const catIds = Object.keys(cats);
-
-        if (catIds.length === 0) {
-          DOM.categoryList.innerHTML = `<p class="text-gray-500 dark:text-gray-400">No categories yet. Add one above!</p>`;
-          return;
-        }
-
-        const list = document.createElement("ul");
-        list.className = "space-y-3";
-        catIds.sort((a, b) => cats[a].n.localeCompare(cats[b].n)).forEach(id => {
-          const cat = cats[id];
-          const item = document.createElement("li");
-          item.className = "flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md";
-          
-          let goalText = "No goal set";
-          if (cat.g) {
-            const goalTypes = { D: 'Daily', W: 'Weekly', M: 'Monthly', Y: 'Yearly' };
-            goalText = `${goalTypes[cat.g.t] || 'Unknown'}: ${cat.g.x}`;
-          }
-
-          item.innerHTML = `
-            <div>
-              <p class="font-semibold">${cat.n}</p>
-              <p class="text-sm text-gray-500 dark:text-gray-400">${goalText}</p>
-            </div>
-            <div class="space-x-2">
-              <button data-id="${id}" class="edit-cat-btn text-indigo-600 dark:text-indigo-400 hover:underline text-sm">Edit</button>
-              <button data-id="${id}" class="delete-cat-btn text-red-600 dark:text-red-400 hover:underline text-sm">Delete</button>
-            </div>
-          `;
-          list.appendChild(item);
-        });
-        DOM.categoryList.appendChild(list);
-      }
-      
-      function generateShortId() {
-        return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
-      }
-
-      async function addCategory(name, goal) {
-        const normalizedName = name.toLowerCase();
-        const existingCategory = Object.values(appState.cats || {}).find(
-          (cat) => cat.n.toLowerCase() === normalizedName
-        );
-
-        if (existingCategory) {
-          alert(`Category "${name}" already exists. Please choose a different name.`);
-          return;
-        }
-
-        const newId = generateShortId();
-        appState.cats[newId] = { n: name, g: goal };
-        await saveStateToDrive();
-        render();
-      }
-
-      async function editCategory(id, newName) {
-        if (appState.cats[id]) {
-          appState.cats[id].n = newName;
-          await saveStateToDrive();
-          render();
-        }
-      }
-
-      async function deleteCategory(id) {
-        if (appState.cats[id]) {
-          // Later: also delete logs associated with this category
-          delete appState.cats[id];
-          await saveStateToDrive();
-          render();
-        }
-      }
-
-      // --- EVENT LISTENERS ---
-      function setupEventListeners() {
-        DOM.addCategoryForm.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const form = e.target;
-          const name = form['cat-name'].value.trim();
-          const goalType = form['cat-goal-type'].value;
-          const goalTarget = form['cat-goal-target'].value;
-
-          if (!name) return;
-
-          let goal = null;
-          if (goalType && goalTarget) {
-            goal = { t: goalType, x: parseInt(goalTarget, 10) };
-          }
-          
-          await addCategory(name, goal);
-          form.reset();
-          DOM.catGoalTarget.disabled = true;
-        });
-
-        DOM.catGoalType.addEventListener("change", (e) => {
-          DOM.catGoalTarget.disabled = !e.target.value;
-          if (!e.target.value) {
-            DOM.catGoalTarget.value = "";
-          }
-        });
-
-        DOM.categoryList.addEventListener("click", (e) => {
-          const target = e.target;
-          const catId = target.dataset.id;
-          if (!catId) return;
-
-          if (target.classList.contains("edit-cat-btn")) {
-            const currentName = appState.cats[catId]?.n;
-            const newName = prompt("Enter new category name:", currentName);
-            if (newName && newName.trim() !== "" && newName !== currentName) {
-              editCategory(catId, newName.trim());
-            }
-          } else if (target.classList.contains("delete-cat-btn")) {
-            const catName = appState.cats[catId]?.n;
-            const confirmation = prompt(`To delete the category "${catName}", please type its name below:`);
-            if (confirmation === catName) {
-              deleteCategory(catId);
-            } else if (confirmation !== null) {
-              alert("The name you entered did not match. Deletion cancelled.");
-            }
-          }
-        });
-      }
-
-      // --- INITIALIZATION ---
-      setupTheme();
-      setupTabs();
-      setupEventListeners();
-      init();
-    </script>
+    <script type="module" src="src/app.js"></script>
   </body>
 </html>
